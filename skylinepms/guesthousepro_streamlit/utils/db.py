@@ -75,6 +75,9 @@ class SQLiteCompatConnection:
             
         if "username" in query.lower():
             query = query.replace("username", "email")
+            
+        # Global word-boundary routing for legacy table calls
+        query = re.sub(r'\breservations\b', 'bookings', query, flags=re.IGNORECASE)
         
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
@@ -176,7 +179,7 @@ def create_account(email: str, password_raw: str):
 def init_db():
     """
     Creates tables inside your Supabase PostgreSQL cluster automatically if they don't exist.
-    Matches the exact table names, column profiles, and foreign keys your application relies on.
+    Matches all extended property columns like floor, max_guests, rates, and tracking notes.
     """
     with get_conn() as conn:
         with conn.conn.cursor() as cur:
@@ -190,16 +193,22 @@ def init_db():
                 );
             """)
 
-            # 2. Units / Rooms Table
+            # 2. Units / Rooms Table (Fully expanded to prevent column mismatch crashes)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS units (
                     id SERIAL PRIMARY KEY,
                     account_id INTEGER NOT NULL,
                     unit_number TEXT NOT NULL,
                     unit_type TEXT NOT NULL,
-                    price_per_night REAL NOT NULL,
-                    status TEXT DEFAULT 'Available',
+                    floor TEXT,
+                    max_guests INTEGER,
+                    rate_nightly REAL NOT NULL DEFAULT 0.0,
+                    rate_weekend REAL DEFAULT 0.0,
+                    rate_monthly REAL DEFAULT 0.0,
+                    price_per_night REAL DEFAULT 0.0,
+                    amenities TEXT,
                     notes TEXT,
+                    status TEXT DEFAULT 'Available',
                     UNIQUE(account_id, unit_number)
                 );
             """)
@@ -217,9 +226,9 @@ def init_db():
                 );
             """)
 
-            # 4. Reservations Table (Matches your app queries exactly: unit_id, check_in_date, check_out_date)
+            # 4. Bookings / Reservations Table
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS reservations (
+                CREATE TABLE IF NOT EXISTS bookings (
                     id SERIAL PRIMARY KEY,
                     account_id INTEGER NOT NULL,
                     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
