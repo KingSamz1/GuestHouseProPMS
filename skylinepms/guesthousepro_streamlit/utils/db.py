@@ -16,15 +16,85 @@ import secrets
 from datetime import datetime
 from contextlib import contextmanager
 
+# ---------- SQLite Compatibility Wrappers ----------
+
+class SQLiteCompatCursor:
+    """A compatibility cursor wrapper mimicking legacy SQLite row-fetching syntax."""
+    def __init__(self, cur):
+        self.cur = cur
+
+    def execute(self, query, params=None):
+        self.cur.execute(query, params)
+        return self
+
+    def fetchone(self):
+        row = self.cur.fetchone()
+        if row:
+            # Inject a fallback alias so legacy code expecting row['username'] works seamlessly
+            row_dict = dict(row)
+            if "email" in row_dict and "username" not in row_dict:
+                row_dict["username"] = row_dict["email"]
+            return row_dict
+        return None
+
+    def fetchall(self):
+        rows = self.cur.fetchall()
+        result = []
+        for row in rows:
+            row_dict = dict(row)
+            if "email" in row_dict and "username" not in row_dict:
+                row_dict["username"] = row_dict["email"]
+            result.append(row_dict)
+        return result
+
+    def __getitem__(self, key):
+        # Fallback handling so calling data columns acts exactly like SQLite dictionary indices
+        row = self.cur.fetchone()
+        if row:
+            row_dict = dict(row)
+            if "email" in row_dict and "username" not in row_dict:
+                row_dict["username"] = row_dict["email"]
+            return row_dict[key]
+        raise IndexError("No rows returned from query execution match.")
+
+
+class SQLiteCompatConnection:
+    """A connection wrapper mimicking SQLite API signatures on top of PostgreSQL."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, query, params=None):
+        # Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
+        if query and "?" in query:
+            query = query.replace("?", "%s")
+        
+        cur = self.conn.cursor(cursor_factory=DictCursor)
+        compat_cursor = SQLiteCompatCursor(cur)
+        compat_cursor.execute(query, params)
+        return compat_cursor
+
+    def cursor(self, *args, **kwargs):
+        cur = self.conn.cursor(*args, **kwargs)
+        return SQLiteCompatCursor(cur)
+
+    def commit(self):
+        return self.conn.commit()
+
+    def rollback(self):
+        return self.conn.rollback()
+
+    def close(self):
+        return self.conn.close()
+
+
 @contextmanager
 def get_conn():
     """
     Context manager that yields a PostgreSQL connection using Streamlit secrets.
-    Ensures commits are processed automatically and cleans up the connection.
+    Wraps the connection to intercept and support legacy SQLite syntax seamlessly.
     """
     try:
-        # Load parameters explicitly to prevent username parsing confusion
-        conn = psycopg2.connect(
+        raw_conn = psycopg2.connect(
             host=st.secrets["database"]["host"],
             port=int(st.secrets["database"]["port"]),
             database=st.secrets["database"]["database"],
@@ -32,13 +102,14 @@ def get_conn():
             password=st.secrets["database"]["password"],
             sslmode="require"
         )
-        yield conn
-        conn.commit()
+        yield SQLiteCompatConnection(raw_conn)
+        raw_conn.commit()
     except Exception as e:
         raise e
     finally:
-        if 'conn' in locals() and conn:
-            conn.close()
+        if 'raw_conn' in locals() and raw_conn:
+            raw_conn.close()
+
 
 # ---------- Password helpers ----------
 
@@ -62,31 +133,19 @@ def get_account(email: str):
     """Retrieves an account record matching the provided email address."""
     try:
         with get_conn() as conn:
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
-                row = cur.fetchone()
-                if row:
-                    # Convert to a standard dictionary so we can inject a username fallback alias
-                    account_dict = dict(row)
-                    account_dict["username"] = account_dict["email"]
-                    return account_dict
-                return None
+            # Internal function uses the connection execution adapter wrapper
+            res = conn.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
+            return res.fetchone()
     except Exception:
         return None
+
 
 def get_account_by_username(username: str):
     """Retrieves an account record matching the provided username/email identifier."""
     try:
         with get_conn() as conn:
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT * FROM accounts WHERE email = %s;", (username,))
-                row = cur.fetchone()
-                if row:
-                    # Convert to a standard dictionary so we can inject a username fallback alias
-                    account_dict = dict(row)
-                    account_dict["username"] = account_dict["email"]
-                    return account_dict
-                return None
+            res = conn.execute("SELECT * FROM accounts WHERE email = %s;", (username,))
+            return res.fetchone()
     except Exception:
         return None
 
@@ -96,17 +155,11 @@ def create_account(email: str, password_raw: str):
     pwd_hash = hash_password(password_raw)
     try:
         with get_conn() as conn:
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute(
-                    "INSERT INTO accounts (email, password_hash) VALUES (%s, %s) RETURNING *;",
-                    (email, pwd_hash)
-                )
-                row = cur.fetchone()
-                if row:
-                    account_dict = dict(row)
-                    account_dict["username"] = account_dict["email"]
-                    return account_dict
-                return None
+            res = conn.execute(
+                "INSERT INTO accounts (email, password_hash) VALUES (%s, %s) RETURNING *;",
+                (email, pwd_hash)
+            )
+            return res.fetchone()
     except Exception:
         return None
 
@@ -119,7 +172,8 @@ def init_db():
     Preserves multi-account setups with 'account_id'.
     """
     with get_conn() as conn:
-        with conn.cursor() as cur:
+        # Use underlying cursor directly for multi-statement DDL setup rules
+        with conn.conn.cursor() as cur:
             # 1. Accounts Table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS accounts (
@@ -183,17 +237,12 @@ def init_db():
             """)
             
             # --- AUTO-SEED ADMIN USER ACCOUNT ---
-            # Checks if the database accounts table is completely empty
             cur.execute("SELECT COUNT(*) FROM accounts;")
-            if cur.fetchone()[0] == 0:
-                # Fetch your admin credentials safely from Streamlit TOML configurations
+            count = cur.fetchone()[0]
+            if count == 0:
                 admin_user = st.secrets["auth"]["username"]
                 admin_pass = st.secrets["auth"]["password"]
-                
-                # Securely hash the password string using your custom token framework
                 hashed_pass = hash_password(admin_pass)
-                
-                # Provision the initial master admin credentials row
                 cur.execute(
                     "INSERT INTO accounts (email, password_hash) VALUES (%s, %s);",
                     (admin_user, hashed_pass)
