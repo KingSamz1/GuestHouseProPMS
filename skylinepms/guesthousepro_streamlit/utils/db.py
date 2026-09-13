@@ -4,9 +4,6 @@ PostgreSQL (Supabase), cloud-hosted, created automatically on first run.
 
 Multi-account: every major table carries account_id so each property
 manager sees only their own data.
-
-Core domain: units, guests, reservations/bookings, folios (billing),
-payments, housekeeping, maintenance, expenses, booking sources.
 """
 import streamlit as st
 import psycopg2
@@ -72,17 +69,12 @@ class SQLiteCompatConnection:
         if not query:
             return None
 
-        # 1. Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
+        # Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
         if "?" in query:
             query = query.replace("?", "%s")
             
-        # 2. Intercept legacy code attempting to select a 'username' column that is now 'email'
         if "username" in query.lower():
             query = query.replace("username", "email")
-            
-        # 3. DYNAMIC TRANSLATION: Catch and route old SQLite 'reservations' queries to PostgreSQL 'bookings'
-        # Employs word-boundary check to prevent mis-matching partial table prefixes or column tokens
-        query = re.sub(r'\breservations\b', 'bookings', query, flags=re.IGNORECASE)
         
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
@@ -184,7 +176,7 @@ def create_account(email: str, password_raw: str):
 def init_db():
     """
     Creates tables inside your Supabase PostgreSQL cluster automatically if they don't exist.
-    Matches the exact column and table layout your frontend queries use.
+    Matches the exact table names, column profiles, and foreign keys your application relies on.
     """
     with get_conn() as conn:
         with conn.conn.cursor() as cur:
@@ -207,6 +199,7 @@ def init_db():
                     unit_type TEXT NOT NULL,
                     price_per_night REAL NOT NULL,
                     status TEXT DEFAULT 'Available',
+                    notes TEXT,
                     UNIQUE(account_id, unit_number)
                 );
             """)
@@ -219,22 +212,25 @@ def init_db():
                     name TEXT NOT NULL,
                     email TEXT,
                     phone TEXT,
-                    id_number TEXT
+                    id_number TEXT,
+                    notes TEXT
                 );
             """)
 
-            # 4. Bookings / Reservations Table
+            # 4. Reservations Table (Matches your app queries exactly: unit_id, check_in_date, check_out_date)
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS bookings (
+                CREATE TABLE IF NOT EXISTS reservations (
                     id SERIAL PRIMARY KEY,
                     account_id INTEGER NOT NULL,
-                    guest_id INTEGER REFERENCES guests(id) ON DELETE SET NULL,
                     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+                    guest_id INTEGER REFERENCES guests(id) ON DELETE SET NULL,
                     check_in_date TEXT NOT NULL,
                     check_out_date TEXT NOT NULL,
                     total_amount REAL NOT NULL,
                     amount_paid REAL DEFAULT 0.0,
-                    status TEXT DEFAULT 'Confirmed'
+                    status TEXT DEFAULT 'reserved',
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
 
@@ -246,7 +242,8 @@ def init_db():
                     description TEXT NOT NULL,
                     amount REAL NOT NULL,
                     category TEXT NOT NULL,
-                    date TEXT NOT NULL
+                    date TEXT NOT NULL,
+                    notes TEXT
                 );
             """)
             
