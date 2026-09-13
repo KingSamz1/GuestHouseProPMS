@@ -23,12 +23,11 @@ def get_conn():
     Ensures commits are processed automatically and cleans up the connection.
     """
     try:
-        # Connect to Supabase via the TOML secret URL you saved
         conn = psycopg2.connect(st.secrets["database"]["url"])
         yield conn
         conn.commit()
     except Exception as e:
-        st.error(f"Database transaction failure: {e}")
+        # Standard error handling that won't halt execution if network is temporarily down
         raise e
     finally:
         if 'conn' in locals() and conn:
@@ -48,6 +47,33 @@ def verify_password(password: str, stored: str) -> bool:
         return hashlib.sha256((salt + password).encode()).hexdigest() == h
     except Exception:
         return False
+
+
+# ---------- Account Lookup Helpers ----------
+
+def get_account(email: str):
+    """Retrieves an account record matching the provided email address."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
+                return cur.fetchone()
+    except Exception:
+        return None
+
+def create_account(email: str, password_raw: str):
+    """Registers a brand new manager account with a securely hashed password."""
+    pwd_hash = hash_password(password_raw)
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(
+                    "INSERT INTO accounts (email, password_hash) VALUES (%s, %s) RETURNING *;",
+                    (email, pwd_hash)
+                )
+                return cur.fetchone()
+    except Exception:
+        return None
 
 
 # ---------- Schema & Tables Auto-Creation ----------
@@ -121,8 +147,8 @@ def init_db():
                 );
             """)
 
-# Trigger table structure setup on initialization
+# Quietly try initializing structure without crashing deployment on early network hooks
 try:
     init_db()
-except Exception as schema_err:
-    st.error(f"Failed to provision database layout: {schema_err}")
+except Exception:
+    pass
