@@ -39,7 +39,7 @@ tab1, tab2, tab3 = st.tabs(["👥 All Guests", "➕ Add Guest", "🔍 Search"])
 with tab1:
     guests = list_guests(account_id=account_id)
     if not guests:
-        empty_state("No guests yet. Add your first guest in the 'Add Guest' tab.", icon="👤")
+        empty_state("No guests yet. Add your first guest in the 'Add Guest' tab..", icon="👤")
     else:
         st.caption(f"{len(guests)} guest(s) on file")
         for g in guests:
