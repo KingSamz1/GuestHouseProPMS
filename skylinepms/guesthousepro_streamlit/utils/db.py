@@ -28,24 +28,30 @@ class SQLiteCompatCursor:
         return self
 
     def fetchone(self):
-        row = self.cur.fetchone()
-        if row:
-            # Inject a fallback alias so legacy code expecting row['username'] works seamlessly
-            row_dict = dict(row)
-            if "email" in row_dict and "username" not in row_dict:
-                row_dict["username"] = row_dict["email"]
-            return row_dict
+        try:
+            row = self.cur.fetchone()
+            if row:
+                row_dict = dict(row)
+                # Inject a fallback alias so legacy code expecting row['username'] works seamlessly
+                if "email" in row_dict and "username" not in row_dict:
+                    row_dict["username"] = row_dict["email"]
+                return row_dict
+        except Exception:
+            pass
         return None
 
     def fetchall(self):
-        rows = self.cur.fetchall()
-        result = []
-        for row in rows:
-            row_dict = dict(row)
-            if "email" in row_dict and "username" not in row_dict:
-                row_dict["username"] = row_dict["email"]
-            result.append(row_dict)
-        return result
+        try:
+            rows = self.cur.fetchall()
+            result = []
+            for row in rows:
+                row_dict = dict(row)
+                if "email" in row_dict and "username" not in row_dict:
+                    row_dict["username"] = row_dict["email"]
+                result.append(row_dict)
+            return result
+        except Exception:
+            return []
 
     def __getitem__(self, key):
         # Fallback handling so calling data columns acts exactly like SQLite dictionary indices
@@ -64,13 +70,20 @@ class SQLiteCompatConnection:
         self.conn = conn
 
     def execute(self, query, params=None):
-        # Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
-        if query and "?" in query:
+        if not query:
+            return None
+
+        # 1. Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
+        if "?" in query:
             query = query.replace("?", "%s")
-        
-        # Intercept legacy code attempting to select a 'username' column that is now 'email'
-        if query and "username" in query.lower():
+            
+        # 2. Intercept legacy code attempting to select a 'username' column that is now 'email'
+        if "username" in query.lower():
             query = query.replace("username", "email")
+            
+        # 3. DYNAMIC TRANSLATION: Route old SQLite 'reservations' queries to PostgreSQL 'bookings'
+        if "reservations" in query.lower():
+            query = query.replace("reservations", "bookings")
         
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
@@ -241,7 +254,14 @@ def init_db():
             # --- AUTO-SEED ADMIN USER ACCOUNT ---
             cur.execute("SELECT COUNT(*) FROM accounts;")
             count = cur.fetchone()
-            if count and count[0] == 0:
+            if isinstance(count, dict):
+                count_val = list(count.values())[0]
+            elif isinstance(count, (list, tuple)):
+                count_val = count[0]
+            else:
+                count_val = count
+
+            if count_val == 0:
                 admin_user = st.secrets["auth"]["username"]
                 admin_pass = st.secrets["auth"]["password"]
                 hashed_pass = hash_password(admin_pass)
