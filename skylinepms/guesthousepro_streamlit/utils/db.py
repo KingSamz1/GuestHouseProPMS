@@ -27,7 +27,6 @@ def get_conn():
         yield conn
         conn.commit()
     except Exception as e:
-        # Standard error handling that won't halt execution if network is temporarily down
         raise e
     finally:
         if 'conn' in locals() and conn:
@@ -57,6 +56,17 @@ def get_account(email: str):
         with get_conn() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
+                return cur.fetchone()
+    except Exception:
+        return None
+
+def get_account_by_username(username: str):
+    """Retrieves an account record matching the provided username/email identifier."""
+    try:
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # Checks email field since your auth module uses username interchangeably
+                cur.execute("SELECT * FROM accounts WHERE email = %s;", (username,))
                 return cur.fetchone()
     except Exception:
         return None
