@@ -64,7 +64,13 @@ def get_account(email: str):
         with get_conn() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
-                return cur.fetchone()
+                row = cur.fetchone()
+                if row:
+                    # Convert to a standard dictionary so we can inject a username fallback alias
+                    account_dict = dict(row)
+                    account_dict["username"] = account_dict["email"]
+                    return account_dict
+                return None
     except Exception:
         return None
 
@@ -73,11 +79,17 @@ def get_account_by_username(username: str):
     try:
         with get_conn() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                # Checks email field since your auth module uses username interchangeably
                 cur.execute("SELECT * FROM accounts WHERE email = %s;", (username,))
-                return cur.fetchone()
+                row = cur.fetchone()
+                if row:
+                    # Convert to a standard dictionary so we can inject a username fallback alias
+                    account_dict = dict(row)
+                    account_dict["username"] = account_dict["email"]
+                    return account_dict
+                return None
     except Exception:
         return None
+
 
 def create_account(email: str, password_raw: str):
     """Registers a brand new manager account with a securely hashed password."""
@@ -89,9 +101,15 @@ def create_account(email: str, password_raw: str):
                     "INSERT INTO accounts (email, password_hash) VALUES (%s, %s) RETURNING *;",
                     (email, pwd_hash)
                 )
-                return cur.fetchone()
+                row = cur.fetchone()
+                if row:
+                    account_dict = dict(row)
+                    account_dict["username"] = account_dict["email"]
+                    return account_dict
+                return None
     except Exception:
         return None
+
 
 # ---------- Schema & Tables Auto-Creation ----------
 
