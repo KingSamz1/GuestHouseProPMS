@@ -73,7 +73,10 @@ st.write("")
 
 # ── Quick actions ──────────────────────────────────────────────────────────────
 section_label("Quick actions")
-qa1, qa2, qa3, qa4, qa5, qa6 = st.columns(6)
+qa0, qa1, qa2, qa3, qa4, qa5, qa6 = st.columns(7)
+with qa0:
+    if st.button("🏢 Add Unit", use_container_width=True, help="Add a new room or apartment"):
+        st.switch_page("pages/1_🏢_Units.py")
 with qa1:
     if st.button("📅 New Booking", use_container_width=True, help="Create a new reservation"):
         st.switch_page("pages/2_📅_Reservations.py")
