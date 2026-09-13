@@ -13,6 +13,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 import hashlib
 import secrets
+import re
 from datetime import datetime
 from contextlib import contextmanager
 
@@ -71,13 +72,18 @@ class SQLiteCompatConnection:
         if not query:
             return None
 
-        # Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
+        # 1. Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
         if "?" in query:
             query = query.replace("?", "%s")
             
+        # 2. Intercept legacy code attempting to select a 'username' column that is now 'email'
         if "username" in query.lower():
             query = query.replace("username", "email")
             
+        # 3. DYNAMIC TRANSLATION: Catch and route old SQLite 'reservations' queries to PostgreSQL 'bookings'
+        # Employs word-boundary check to prevent mis-matching partial table prefixes or column tokens
+        query = re.sub(r'\breservations\b', 'bookings', query, flags=re.IGNORECASE)
+        
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
         compat_cursor.execute(query, params)
@@ -217,7 +223,7 @@ def init_db():
                 );
             """)
 
-            # 4. Bookings / Reservations Table (Aligned completely to your frontend schema)
+            # 4. Bookings / Reservations Table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bookings (
                     id SERIAL PRIMARY KEY,
