@@ -93,7 +93,6 @@ def create_account(email: str, password_raw: str):
     except Exception:
         return None
 
-
 # ---------- Schema & Tables Auto-Creation ----------
 
 def init_db():
@@ -164,8 +163,25 @@ def init_db():
                     date TEXT NOT NULL
                 );
             """)
+            
+            # --- AUTO-SEED ADMIN USER ACCOUNT ---
+            # Checks if the database accounts table is completely empty
+            cur.execute("SELECT COUNT(*) FROM accounts;")
+            if cur.fetchone()[0] == 0:
+                # Fetch your admin credentials safely from Streamlit TOML configurations
+                admin_user = st.secrets["auth"]["username"]
+                admin_pass = st.secrets["auth"]["password"]
+                
+                # Securely hash the password string using your custom token framework
+                hashed_pass = hash_password(admin_pass)
+                
+                # Provision the initial master admin credentials row
+                cur.execute(
+                    "INSERT INTO accounts (email, password_hash) VALUES (%s, %s);",
+                    (admin_user, hashed_pass)
+                )
 
-# Quietly try initializing structure without crashing deployment on early network hooks
+# Run the database setup script cleanly on app launch
 try:
     init_db()
 except Exception:
