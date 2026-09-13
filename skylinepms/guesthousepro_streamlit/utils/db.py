@@ -32,7 +32,6 @@ class SQLiteCompatCursor:
             row = self.cur.fetchone()
             if row:
                 row_dict = dict(row)
-                # Inject a fallback alias so legacy code expecting row['username'] works seamlessly
                 if "email" in row_dict and "username" not in row_dict:
                     row_dict["username"] = row_dict["email"]
                 return row_dict
@@ -54,7 +53,6 @@ class SQLiteCompatCursor:
             return []
 
     def __getitem__(self, key):
-        # Fallback handling so calling data columns acts exactly like SQLite dictionary indices
         row = self.cur.fetchone()
         if row:
             row_dict = dict(row)
@@ -73,18 +71,13 @@ class SQLiteCompatConnection:
         if not query:
             return None
 
-        # 1. Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
+        # Convert SQLite style '?' parameter placeholders to PostgreSQL '%s' tokens
         if "?" in query:
             query = query.replace("?", "%s")
             
-        # 2. Intercept legacy code attempting to select a 'username' column that is now 'email'
         if "username" in query.lower():
             query = query.replace("username", "email")
             
-        # 3. DYNAMIC TRANSLATION: Route old SQLite 'reservations' queries to PostgreSQL 'bookings'
-        if "reservations" in query.lower():
-            query = query.replace("reservations", "bookings")
-        
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
         compat_cursor.execute(query, params)
@@ -185,7 +178,7 @@ def create_account(email: str, password_raw: str):
 def init_db():
     """
     Creates tables inside your Supabase PostgreSQL cluster automatically if they don't exist.
-    Preserves multi-account setups with 'account_id'.
+    Matches the exact column and table layout your frontend queries use.
     """
     with get_conn() as conn:
         with conn.conn.cursor() as cur:
@@ -224,15 +217,15 @@ def init_db():
                 );
             """)
 
-            # 4. Reservations / Bookings Table
+            # 4. Bookings / Reservations Table (Aligned completely to your frontend schema)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bookings (
                     id SERIAL PRIMARY KEY,
                     account_id INTEGER NOT NULL,
-                    guest_id INTEGER,
-                    unit_number TEXT NOT NULL,
-                    check_in TEXT NOT NULL,
-                    check_out TEXT NOT NULL,
+                    guest_id INTEGER REFERENCES guests(id) ON DELETE SET NULL,
+                    unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+                    check_in_date TEXT NOT NULL,
+                    check_out_date TEXT NOT NULL,
                     total_amount REAL NOT NULL,
                     amount_paid REAL DEFAULT 0.0,
                     status TEXT DEFAULT 'Confirmed'
@@ -254,10 +247,11 @@ def init_db():
             # --- AUTO-SEED ADMIN USER ACCOUNT ---
             cur.execute("SELECT COUNT(*) FROM accounts;")
             count = cur.fetchone()
-            if isinstance(count, dict):
-                count_val = list(count.values())[0]
-            elif isinstance(count, (list, tuple)):
+            
+            if isinstance(count, (list, tuple)):
                 count_val = count[0]
+            elif isinstance(count, dict):
+                count_val = list(count.values())[0]
             else:
                 count_val = count
 
@@ -270,7 +264,6 @@ def init_db():
                     (admin_user, hashed_pass)
                 )
 
-# Run the database setup script cleanly on app launch
 try:
     init_db()
 except Exception:
