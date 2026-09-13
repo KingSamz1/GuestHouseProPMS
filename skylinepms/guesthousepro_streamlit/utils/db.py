@@ -23,9 +23,15 @@ def get_conn():
     Ensures commits are processed automatically and cleans up the connection.
     """
     try:
-        # Pull the secret directly as a clean string object to prevent dictionary parsing errors
-        connection_string = str(st.secrets["database"]["url"]).strip()
-        conn = psycopg2.connect(connection_string)
+        # Load parameters explicitly to prevent username parsing confusion
+        conn = psycopg2.connect(
+            host=st.secrets["database"]["host"],
+            port=int(st.secrets["database"]["port"]),
+            database=st.secrets["database"]["database"],
+            user=st.secrets["database"]["user"],
+            password=st.secrets["database"]["password"],
+            sslmode="require"
+        )
         yield conn
         conn.commit()
     except Exception as e:
