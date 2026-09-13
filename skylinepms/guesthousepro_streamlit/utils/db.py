@@ -68,6 +68,10 @@ class SQLiteCompatConnection:
         if query and "?" in query:
             query = query.replace("?", "%s")
         
+        # Intercept legacy code attempting to select a 'username' column that is now 'email'
+        if query and "username" in query.lower():
+            query = query.replace("username", "email")
+        
         cur = self.conn.cursor(cursor_factory=DictCursor)
         compat_cursor = SQLiteCompatCursor(cur)
         compat_cursor.execute(query, params)
@@ -133,7 +137,6 @@ def get_account(email: str):
     """Retrieves an account record matching the provided email address."""
     try:
         with get_conn() as conn:
-            # Internal function uses the connection execution adapter wrapper
             res = conn.execute("SELECT * FROM accounts WHERE email = %s;", (email,))
             return res.fetchone()
     except Exception:
@@ -172,7 +175,6 @@ def init_db():
     Preserves multi-account setups with 'account_id'.
     """
     with get_conn() as conn:
-        # Use underlying cursor directly for multi-statement DDL setup rules
         with conn.conn.cursor() as cur:
             # 1. Accounts Table
             cur.execute("""
@@ -238,8 +240,8 @@ def init_db():
             
             # --- AUTO-SEED ADMIN USER ACCOUNT ---
             cur.execute("SELECT COUNT(*) FROM accounts;")
-            count = cur.fetchone()[0]
-            if count == 0:
+            count = cur.fetchone()
+            if count and count[0] == 0:
                 admin_user = st.secrets["auth"]["username"]
                 admin_pass = st.secrets["auth"]["password"]
                 hashed_pass = hash_password(admin_pass)
