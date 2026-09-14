@@ -315,7 +315,7 @@ def record_payment(reservation_id, amount, payment_date, method,
 
 
 def list_payments(reservation_id=None, account_id=None, limit=None):
-    q = ("SELECT p.*, r.booking_ref, g.full_name, u.unit_number, r.account_id "
+    q = ("SELECT p.*, r.booking_ref, g.full_name AS guest_name, u.unit_number, r.account_id "
          "FROM payments p "
          "JOIN reservations r ON r.id = p.reservation_id "
          "JOIN guests g ON g.id = r.guest_id "
@@ -336,7 +336,7 @@ def list_payments(reservation_id=None, account_id=None, limit=None):
 def get_payment(payment_id):
     with get_conn() as conn:
         return fetchone(conn,
-            "SELECT p.*, r.booking_ref, g.full_name, u.unit_number, u.unit_type "
+            "SELECT p.*, r.booking_ref, g.full_name AS guest_name, u.unit_number, u.unit_type "
             "FROM payments p "
             "JOIN reservations r ON r.id = p.reservation_id "
             "JOIN guests g ON g.id = r.guest_id "
