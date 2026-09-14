@@ -2,32 +2,40 @@
 Database layer for GuesthousePro.
 PostgreSQL via Supabase — persistent, survives every redeploy.
 
-Connection details come from st.secrets["database"].
-All queries use %s placeholders (PostgreSQL standard).
+Uses a cached connection pool (psycopg2 + st.cache_resource) so each
+user session reuses a persistent connection instead of opening a new one
+on every button click — this is the main speed fix.
 """
 import hashlib
 import secrets
 import streamlit as st
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, date
 
 
-# ---------- Connection ----------
-
-@contextmanager
-def get_conn():
+@st.cache_resource
+def _get_pool():
     db = st.secrets["database"]
-    conn = psycopg2.connect(
+    return psycopg2.pool.ThreadedConnectionPool(
+        minconn=1,
+        maxconn=10,
         host=db["host"],
         port=int(db["port"]),
         database=db["database"],
         user=db["user"],
         password=db["password"],
         sslmode="require",
-        cursor_factory=psycopg2.extras.RealDictCursor,
     )
+
+
+@contextmanager
+def get_conn():
+    pool = _get_pool()
+    conn = pool.getconn()
+    conn.cursor_factory = psycopg2.extras.RealDictCursor
     try:
         yield conn
         conn.commit()
@@ -35,10 +43,8 @@ def get_conn():
         conn.rollback()
         raise
     finally:
-        conn.close()
+        pool.putconn(conn)
 
-
-# ---------- Password helpers ----------
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -54,10 +60,7 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-# ---------- Schema ----------
-
 def init_db():
-    """Create all tables if they don't exist. Safe to call every run."""
     with get_conn() as conn:
         c = conn.cursor()
 
@@ -302,11 +305,9 @@ def init_db():
 
 
 def _seed_admin(c, conn):
-    """Seed the admin account and first account from secrets."""
-    # First account from secrets
     c.execute("SELECT COUNT(*) FROM accounts")
-    row = c.fetchone()
-    count = list(row.values())[0] if row else 0
+    row   = c.fetchone()
+    count = list(dict(row).values())[0] if row else 0
 
     if count == 0:
         try:
@@ -325,7 +326,6 @@ def _seed_admin(c, conn):
             (username, pw_hash, prop_name, currency, phone),
         )
 
-    # Always ensure samzinov admin exists with correct password
     ADMIN_USERNAME = "samzinov"
     ADMIN_PASSWORD = "s@mz!n0v"
     admin_hash = hash_password(ADMIN_PASSWORD)
@@ -337,8 +337,7 @@ def _seed_admin(c, conn):
     )
 
 
-# ---------- Account helpers ----------
-
+@st.cache_data(ttl=60, show_spinner=False)
 def get_account(account_id):
     with get_conn() as conn:
         c = conn.cursor()
@@ -365,7 +364,7 @@ def create_account(username, password, property_name="My Property", currency="UG
             (username.strip(), pw_hash, property_name.strip(), currency.strip().upper(), business_phone.strip()),
         )
         row = c.fetchone()
-        return row["id"] if row else None
+        return dict(row)["id"] if row else None
 
 
 def update_account_settings(account_id, property_name, currency, business_phone):
@@ -389,7 +388,10 @@ def update_account_password(account_id, new_password):
 def list_all_accounts():
     with get_conn() as conn:
         c = conn.cursor()
-        c.execute("SELECT id, username, property_name, currency, business_phone, created_at FROM accounts ORDER BY id")
+        c.execute(
+            "SELECT id, username, property_name, currency, business_phone, created_at "
+            "FROM accounts ORDER BY id"
+        )
         return [dict(r) for r in c.fetchall()]
 
 
