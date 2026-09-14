@@ -345,40 +345,35 @@ def record_payment(reservation_id, amount, payment_date, method,
 
 
 def list_payments(reservation_id=None, account_id=None, limit=None):
+    q = ("SELECT p.*, r.booking_ref, g.full_name AS guest_name, u.unit_number, r.account_id "
+         "FROM payments p "
+         "JOIN reservations r ON r.id = p.reservation_id "
+         "JOIN guests g ON g.id = r.guest_id "
+         "JOIN units u ON u.id = r.unit_id "
+         "WHERE 1=1")
+    params = []
+    if reservation_id:
+        q += " AND p.reservation_id=%s"; params.append(reservation_id)
+    if account_id:
+        q += " AND r.account_id=%s"; params.append(account_id)
+    q += " ORDER BY p.payment_date DESC"
+    if limit:
+        q += f" LIMIT {int(limit)}"
     with get_conn() as conn:
-        q = """SELECT p.*, r.booking_ref, g.full_name as guest_name,
-                      u.unit_number, r.account_id
-               FROM payments p
-               JOIN reservations r ON r.id = p.reservation_id
-               JOIN guests g ON g.id = r.guest_id
-               JOIN units u ON u.id = r.unit_id
-               WHERE 1=1"""
-        params = []
-        if reservation_id:
-            q += " AND p.reservation_id = ?"
-            params.append(reservation_id)
-        if account_id:
-            q += " AND r.account_id = ?"
-            params.append(account_id)
-        q += " ORDER BY p.payment_date DESC"
-        if limit:
-            q += f" LIMIT {int(limit)}"
-        rows = conn.execute(q, params).fetchall()
-        return [dict(r) for r in rows]
+        return fetchall(conn, q, params)
 
 
 def get_payment(payment_id):
     with get_conn() as conn:
-        row = conn.execute(
-            """SELECT p.*, r.booking_ref, g.full_name, u.unit_number, u.unit_type
-               FROM payments p
-               JOIN reservations r ON r.id = p.reservation_id
-               JOIN guests g ON g.id = r.guest_id
-               JOIN units u ON u.id = r.unit_id
-               WHERE p.id=?""",
+        return fetchone(conn,
+            "SELECT p.*, r.booking_ref, g.full_name AS guest_name, u.unit_number, u.unit_type "
+            "FROM payments p "
+            "JOIN reservations r ON r.id = p.reservation_id "
+            "JOIN guests g ON g.id = r.guest_id "
+            "JOIN units u ON u.id = r.unit_id "
+            "WHERE p.id=%s",
             (payment_id,),
-        ).fetchone()
-        return dict(row) if row else None
+        )
 
 
 # ---------- Housekeeping ----------
