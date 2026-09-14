@@ -61,6 +61,9 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 def init_db():
+    import streamlit as st
+    if st.session_state.get("_db_initialized"):
+        return
     with get_conn() as conn:
         c = conn.cursor()
 
@@ -301,6 +304,7 @@ def init_db():
 
         conn.commit()
         _seed_admin(c, conn)
+        st.session_state["_db_initialized"] = True
         conn.commit()
 
 
