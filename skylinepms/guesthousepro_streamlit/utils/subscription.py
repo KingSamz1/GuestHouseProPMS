@@ -71,8 +71,6 @@ def get_subscription(account_id):
         )
         if not row:
             return None
-        # PostgreSQL returns TIMESTAMP columns as datetime objects.
-        # Convert them to strings so all downstream code can treat them uniformly.
         row = dict(row)
         for key in ("created_at", "updated_at"):
             if key in row and hasattr(row[key], "isoformat"):
