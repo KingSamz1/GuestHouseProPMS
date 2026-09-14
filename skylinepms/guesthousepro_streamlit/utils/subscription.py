@@ -53,11 +53,19 @@ def create_subscription(account_id, property_name):
 
 def get_subscription(account_id):
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM subscription WHERE account_id = ? ORDER BY id DESC LIMIT 1",
+        row = fetchone(conn,
+            "SELECT * FROM subscription WHERE account_id=%s ORDER BY id DESC LIMIT 1",
             (account_id,),
-        ).fetchone()
-        return dict(row) if row else None
+        )
+        if not row:
+            return None
+        # PostgreSQL returns TIMESTAMP columns as datetime objects.
+        # Convert them to strings so all downstream code can treat them uniformly.
+        row = dict(row)
+        for key in ("created_at", "updated_at"):
+            if key in row and hasattr(row[key], "isoformat"):
+                row[key] = row[key].isoformat()
+        return row
 
 
 def _due_date(sub):
