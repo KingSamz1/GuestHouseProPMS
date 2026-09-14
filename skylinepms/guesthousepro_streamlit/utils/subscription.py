@@ -4,6 +4,7 @@ GuesthousePro subscription logic — PostgreSQL version.
 import calendar
 import secrets
 import string
+import streamlit as st
 from datetime import date, datetime, timedelta
 from utils.db import get_conn
 from utils.pg import fetchone, fetchall, execute, lastrowid, scalar
@@ -15,11 +16,19 @@ ADMIN_USERNAME = "samzinov"
 
 
 def _today():   return date.today()
-def _ds(d):     return d.isoformat()
+
+def _ds(d):
+    if isinstance(d, datetime):
+        return d.strftime("%Y-%m-%d")
+    return d.isoformat()
 
 def _parse(value):
-    if not value: return None
-    if isinstance(value, date): return value
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
     return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
 
 def _add_month(d, months=1):
@@ -34,10 +43,11 @@ def _make_code(length=10):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def is_admin(account_id):
     with get_conn() as conn:
         row = fetchone(conn, "SELECT username FROM accounts WHERE id=%s", (account_id,))
-        return row and row["username"].lower() == ADMIN_USERNAME.lower()
+        return bool(row and row["username"].lower() == ADMIN_USERNAME.lower())
 
 
 def create_subscription(account_id, property_name):
@@ -167,7 +177,7 @@ def redeem_renewal_code(account_id, code):
         row = fetchone(conn, "SELECT * FROM renewal_codes WHERE code=%s", (code,))
         if not row:          raise ValueError("Invalid code — check with your administrator.")
         if row["used_by"]:   raise ValueError("This code has already been used.")
-        sub     = get_subscription(account_id)
+        sub = get_subscription(account_id)
         if not sub:          raise ValueError("No subscription found for your account.")
         months  = row["months"]
         today   = _today()
@@ -268,7 +278,8 @@ def verify_password_reset_code(username, code):
         )
         if not row:        raise ValueError("Invalid code for this username. Check with support.")
         if row["used_at"]: raise ValueError("This code has already been used.")
-        if datetime.fromisoformat(str(row["expires_at"])[:19]) < datetime.now():
+        expires_at = _parse(row["expires_at"])
+        if expires_at and date.today() > expires_at + timedelta(days=1):
             raise ValueError("This code has expired. Ask support for a new one.")
     return account["id"]
 
