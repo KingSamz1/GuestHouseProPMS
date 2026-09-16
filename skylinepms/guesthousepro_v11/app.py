@@ -20,7 +20,7 @@ property_name = account["property_name"] if account else "My Property"
 currency      = account["currency"] if account else "UGX"
 c = colors()
 
-page_header(property_name, subtitle=f"Management Dashboard · {date.today().strftime('%A, %d %B %Y')}", icon="🏨")
+page_header(property_name, subtitle=f"Management Dashboard! · {date.today().strftime('%A, %d %B %Y')}", icon="🏨")
 subscription_banner()
 st.write("")
 
