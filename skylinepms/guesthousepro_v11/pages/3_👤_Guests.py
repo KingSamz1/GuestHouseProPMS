@@ -67,7 +67,7 @@ with tab1:
                         e_phone = (dc_values[e_dial] + e_phone_local.strip()).strip()
                         e_email = st.text_input("Email", value=g["email"])
                         e_nat   = st.text_input("Nationality", value=g["nationality"])
-                        e_id    = st.text_input("ID / Passport number", value=g["id_number"])
+                        e_id    = st.text_input("ID / Passport Number", value=g["id_number"])
                         e_co    = st.text_input("Company", value=g["company"])
                         e_req   = st.text_input("Preferences / Special requests", value=g["special_requests"])
                         cs, cc  = st.columns(2)
