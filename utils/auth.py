@@ -110,7 +110,8 @@ def check_login():
         submitted = st.form_submit_button(t("Log in"), type="primary", use_container_width=True)
 
     _forgot_user = st.session_state.get("_login_username_hint", "")
-    _forgot_url  = f"?page=forgot&username={urllib.parse.quote(_forgot_user)}&lang={get_language()}" if _forgot_user else f"?page=forgot&lang={get_language()}"
+    _lang_param = get_language()
+_forgot_url = f"?page=forgot&lang={_lang_param}" + (f"&username={urllib.parse.quote(_forgot_user)}" if _forgot_user else "")
     st.markdown(
         f'<div style="display:flex; justify-content:space-between; align-items:center; '
         f'font-size:13px; color:{c["TEXT_MUTED"]}; margin-top:0.4rem; margin-bottom:0.2rem;">'
