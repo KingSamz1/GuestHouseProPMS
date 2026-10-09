@@ -140,6 +140,10 @@ def check_login():
 
 
 def _show_forgot_page(username_hint=""):
+     _lang = st.query_params.get("lang", "en")
+    if _lang != "en":
+        st.session_state["app_lang"] = _lang
+        
     from utils.subscription import redeem_password_reset_code
     from utils.db import update_account_password, get_account_by_username
     from utils.theme import apply_theme, colors
