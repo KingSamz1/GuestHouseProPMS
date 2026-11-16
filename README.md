@@ -1,114 +1,129 @@
-# 🏨 GuesthousePro
+# GuesthousePro — Property Management System
 
-**Smart Property & Guest Management for Guesthouses and Serviced Apartments**
+GuesthousePro is a Python and Streamlit application for managing guesthouses, serviced apartments and short-stay accommodation.
 
-GuesthousePro is a Streamlit-based Property Management System (PMS) built for
-guesthouses, serviced apartments, and short-stay properties.
-It handles reservations, guests, billing, housekeeping, maintenance, expenses,
-WhatsApp messaging, and business reports — all in one place.
+It brings together room availability, reservations, guest records, check-in and check-out, billing, housekeeping, maintenance, expenses, messaging and operating reports.
 
----
+## Project overview
 
-## Features
+- **Project:** GuesthousePro Property Management System (PMS)
+- **Developer:** Samuel — [@KingSamz1](https://github.com/KingSamz1)
+- **Technology:** Python, Streamlit, PostgreSQL, Pandas and ReportLab
+- **Status:** Independently developed application / evolving MVP
 
-| Module | What it does |
+## Main application areas
+
+| Area | Purpose |
 |---|---|
-| 📊 Dashboard | Live occupancy, today's arrivals/departures, revenue, quick actions |
-| 🏢 Units | Add and manage all rooms with live status (available, occupied, reserved, cleaning, maintenance) |
-| 📅 Reservations | Booking calendar grid, new reservations, availability check |
-| 🛎️ Check In / Out | Focused arrival & departure workflow with payment collection |
-| 👤 Guests | Guest profiles, ID documents, stay history, search |
-| 💰 Billing | Guest folios, extra charges, payments (cash/MoMo/bank), PDF receipts |
-| 🧹 Housekeeping | Status board, task management (dirty → cleaning → inspected → available) |
-| 🔧 Maintenance | Issue log, priority levels, staff assignment, room blocking |
-| 💵 Expenses | Operating cost tracking, category breakdown, P&L |
-| 📲 WhatsApp | Booking confirmations, arrival reminders, checkout, post-checkout, custom messages |
-| 📊 Reports | Monthly summary, ADR, occupancy %, RevPAR, booking sources, 6-month P&L |
-| ⚙️ Settings | Property name, currency, phone, password |
-| 🔑 Subscription | Trial & renewal management, renewal codes |
+| Dashboard | Occupancy, arrivals, departures and business overview |
+| Units | Room details and availability/status management |
+| Reservations | Booking records and availability workflows |
+| Check-in / check-out | Guest arrival and departure process |
+| Guests | Guest profiles, documents and stay history |
+| Billing | Charges, payments and PDF receipts |
+| Housekeeping | Cleaning tasks and room status updates |
+| Maintenance | Maintenance issue records and task tracking |
+| Expenses | Operating expense records |
+| Messages | Guest message preparation and WhatsApp click-to-chat links |
+| Reports | Occupancy, revenue and business summaries |
+| Settings | Property profile, currency, contact details and password |
+| Subscription | Trial and renewal-code screens |
 
----
+## Technology and architecture
 
-## Quick Start
+- **Python** — application and business logic
+- **Streamlit** — interactive web interface
+- **PostgreSQL** — persistent relational database
+- **Psycopg2** — PostgreSQL connection pooling and database access
+- **Pandas** — report tables and data handling
+- **ReportLab** — PDF receipt generation
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+The database connection is configured through Streamlit secrets and uses SSL.
 
-# 2. Set up secrets
-cp .streamlit/secrets.toml.template .streamlit/secrets.toml
-# Edit secrets.toml with your username/password and property info
+## Repository structure
 
-# 3. Run
-streamlit run app.py
+```text
+app.py                  Streamlit application entry point
+pages/                  Units, reservations, guests, billing and other modules
+utils/db.py             PostgreSQL connection pool, schema and account helpers
+utils/pg.py             Shared PostgreSQL query helpers
+utils/logic.py          Guesthouse, reservation, billing and operations logic
+utils/auth.py           Login, registration and password-reset interface
+utils/receipts.py       PDF receipt generation
+utils/whatsapp.py       Guest message preparation and click-to-chat links
+utils/subscription.py   Trial, renewal and administrator functions
+utils/theme.py          Shared interface styling and components
+utils/i18n.py           Language and translation support
+requirements.txt        Python dependencies
 ```
 
-The SQLite database (`data/guesthouse.db`) is created automatically on first run.
+## Run locally
 
----
+1. Install Python 3.10 or newer.
+2. Clone this repository and open its folder.
+3. Create and activate a virtual environment:
 
-## Deployment (Streamlit Cloud)
+   ```bash
+   python -m venv .venv
+   # Linux/macOS
+   source .venv/bin/activate
+   # Windows PowerShell
+   .venv\\Scripts\\Activate.ps1
+   ```
 
-1. Push this folder to a GitHub repository.
-2. Connect on [share.streamlit.io](https://share.streamlit.io).
-3. Set `app.py` as the entry point.
-4. Add your secrets under **App settings → Secrets**.
+4. Install dependencies:
 
----
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Directory structure
+5. Create `.streamlit/secrets.toml` locally and provide your own PostgreSQL connection and first-account details:
 
-```
-guesthousepro_streamlit/
-├── app.py                   # Dashboard (main entry point)
-├── requirements.txt
-├── .streamlit/
-│   ├── config.toml
-│   └── secrets.toml.template
-├── pages/
-│   ├── 1_🏢_Units.py
-│   ├── 2_📅_Reservations.py
-│   ├── 3_👤_Guests.py
-│   ├── 4_🛎️_Check_In_Out.py
-│   ├── 5_💰_Billing.py
-│   ├── 6_🧹_Housekeeping.py
-│   ├── 7_🔧_Maintenance.py
-│   ├── 8_💵_Expenses.py
-│   ├── 9_📊_Reports.py
-│   ├── 10_📲_Messages.py
-│   ├── 11_⚙️_Settings.py
-│   └── 12_🔑_Subscription.py
-├── utils/
-│   ├── __init__.py
-│   ├── db.py          # SQLite schema + account helpers
-│   ├── auth.py        # Login / signup
-│   ├── logic.py       # Business logic (units, guests, reservations, billing…)
-│   ├── theme.py       # Blue/ocean UI palette + shared components
-│   ├── whatsapp.py    # Message builders + click-to-chat links
-│   ├── receipts.py    # PDF receipt generation (reportlab)
-│   └── subscription.py# Trial + renewal + admin codes
-├── data/              # SQLite database (auto-created)
-├── receipts/          # Generated PDF receipts
-└── guest_documents/   # Uploaded ID/passport documents
-```
+   ```toml
+   [database]
+   host = "YOUR-POSTGRES-HOST"
+   port = 5432
+   database = "postgres"
+   user = "YOUR-DATABASE-USER"
+   password = "YOUR-DATABASE-PASSWORD"
 
----
+   [auth]
+   username = "YOUR_INITIAL_USERNAME"
+   password = "YOUR_INITIAL_PASSWORD"
 
-## Default admin account
+   [property]
+   property_name = "Your Property Name"
+   currency = "UGX"
+   phone = ""
 
-The system creates a hidden admin account (`samzinov`) automatically.
-Your own first account is created from `secrets.toml` or via the signup page.
+   # Optional: provisions the reserved administrator account
+   # only when that account does not already exist.
+   [admin]
+   password = "A-UNIQUE-STRONG-ADMIN-PASSWORD"
+   ```
 
----
+6. Start the application:
 
-## Built with
+   ```bash
+   streamlit run app.py
+   ```
 
-- [Streamlit](https://streamlit.io)
-- [SQLite](https://sqlite.org)
-- [ReportLab](https://www.reportlab.com) (PDF receipts)
-- [Pandas](https://pandas.pydata.org)
+The `[auth]` section is read only when the database has no accounts yet. The optional `[admin]` password provisions the administrator account on a fresh database; it does not reset an existing administrator password. Existing account passwords can be changed in the application's Settings page.
 
----
+Never commit real secrets, guest records, identity documents, database backups or generated receipts.
 
-*GuesthousePro — distinct from LandlordPro, which handles long-term rental properties.*
-*GuesthousePro is purpose-built for guesthouses, serviced apartments, and short-stay hospitality.*
+## Current implementation notes
+
+- Guest and reservation records, billing, payments, housekeeping, maintenance and expenses are represented in the application.
+- WhatsApp messages are prepared as prefilled click-to-chat links. Automated sending through a WhatsApp Business API provider is not included in the current messaging module.
+- Payment methods and references can be recorded in the application; an automated payment-provider reconciliation integration should be assessed separately.
+- The current password helper uses salted SHA-256. A password-specific password-hashing algorithm should be adopted before production use.
+- Record-level account authorization, guest-document access, backups, audit logging, upload validation and production deployment security need further review before storing real guests' sensitive records.
+
+This repository is shared as a software-development portfolio and demonstration. Do not use it with real guest identity documents or payment records without completing a security review and configuring appropriate access controls, backups and deployment protections.
+
+## Developer
+
+Built by **Samuel** as an independent software project exploring practical application development, database-backed workflows, hospitality operations and business process automation.
+
+GitHub: [@KingSamz1](https://github.com/KingSamz1)
