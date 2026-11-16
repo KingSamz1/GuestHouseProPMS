@@ -322,9 +322,9 @@ def init_db():
 
 
 def _seed_admin(c, conn):
-    """Seed accounts from secrets on first run."""
+    """Create initial accounts from private deployment secrets."""
     c.execute("SELECT COUNT(*) FROM accounts")
-    row   = c.fetchone()
+    row = c.fetchone()
     count = list(dict(row).values())[0] if row else 0
 
     if count == 0:
@@ -334,9 +334,12 @@ def _seed_admin(c, conn):
             prop_name    = st.secrets.get("property", {}).get("property_name", "My Property")
             currency     = st.secrets.get("property", {}).get("currency", "UGX")
             phone        = st.secrets.get("property", {}).get("phone", "")
-        except Exception:
-            username = "admin"; raw_password = "changeme123"
-            prop_name = "My Property"; currency = "UGX"; phone = ""
+        except Exception as exc:
+            raise RuntimeError(
+                "No accounts exist yet. Configure [auth] username and password "
+                "in Streamlit secrets before the first launch."
+            ) from exc
+
         pw_hash = hash_password(raw_password)
         c.execute(
             "INSERT INTO accounts (username, password_hash, property_name, currency, business_phone) "
@@ -344,16 +347,18 @@ def _seed_admin(c, conn):
             (username, pw_hash, prop_name, currency, phone),
         )
 
-    # Always ensure samzinov admin exists with correct password
-    ADMIN_USERNAME = "samzinov"
-    ADMIN_PASSWORD = "s@mz!n0v"
-    admin_hash = hash_password(ADMIN_PASSWORD)
-    c.execute(
-        "INSERT INTO accounts (username, password_hash, property_name, currency, business_phone) "
-        "VALUES (%s, %s, 'GuesthousePro Admin', 'UGX', '') "
-        "ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash",
-        (ADMIN_USERNAME, admin_hash),
-    )
+    # Never publish or automatically reset an administrator password.
+    # On a fresh database, an optional [admin] password secret provisions
+    # the reserved admin account. Existing passwords remain user-managed
+    # through the application's Settings page.
+    admin_password = st.secrets.get("admin", {}).get("password")
+    if admin_password:
+        c.execute(
+            "INSERT INTO accounts (username, password_hash, property_name, currency, business_phone) "
+            "VALUES (%s, %s, 'GuesthousePro Admin', 'UGX', '') "
+            "ON CONFLICT (username) DO NOTHING",
+            ("samzinov", hash_password(admin_password)),
+        )
 
 
 # ---------- Account helpers ----------
@@ -376,6 +381,8 @@ def get_account_by_username(username):
 
 
 def create_account(username, password, property_name="My Property", currency="UGX", business_phone=""):
+    if username.strip().casefold() == "samzinov":
+        raise ValueError("This username is reserved for the administrator.")
     pw_hash = hash_password(password)
     with get_conn() as conn:
         c = conn.cursor()

@@ -330,6 +330,7 @@ def _show_signup_page():
         if len(new_password) < 6:                  errors.append("Password must be at least 6 characters.")
         if new_password != confirm_pass:            errors.append("Passwords don't match.")
         if not property_name.strip():              errors.append("Property name is required.")
+        if new_username.strip().casefold() == "samzinov": errors.append("This username is reserved for the administrator.")
         if get_account_by_username(new_username.strip()): errors.append("That username is already taken.")
         if errors:
             for e in errors: st.error(e)
